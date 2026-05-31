@@ -1,0 +1,48 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "TerraformStateAccess",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:ListBucket",
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable"
+      ],
+      "Resource": [
+        "arn:aws:s3:::dutielly-terraform-state-389642461024-ap-south-1",
+        "arn:aws:s3:::dutielly-terraform-state-389642461024-ap-south-1/*",
+        "arn:aws:dynamodb:ap-south-1:389642461024:table/dutielly-terraform-locks"
+      ]
+    },
+    {
+      "Sid": "DeploymentServices",
+      "Effect": "Allow",
+      "Action": [
+        "apprunner:*",
+        "ecr:*",
+        "ec2:*",
+        "rds:*",
+        "secretsmanager:*",
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:GetRole",
+        "iam:PassRole",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:ListRolePolicies",
+        "iam:ListAttachedRolePolicies",
+        "iam:GetRolePolicy",
+        "tag:GetResources"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

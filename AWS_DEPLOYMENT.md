@@ -23,6 +23,27 @@ Please provide these before I can deploy into your AWS account:
 - Optional custom domain name, for example `app.dutielly.com`
 - Confirmation of RDS SQL Server size and budget. The default is SQL Server Express on `db.t3.small`.
 
+## Prepared Production Target
+
+These values are prepared for the current GitHub repository and your AWS account.
+
+```text
+AWS account ID: 389642461024
+AWS region: ap-south-1
+GitHub repository: ashishsharma-netdev/Dutielly
+Default branch: main
+Deployment environment: prod
+Terraform state bucket: dutielly-terraform-state-389642461024-ap-south-1
+Terraform lock table: dutielly-terraform-locks
+GitHub Actions role name: DutiellyGitHubDeployRole
+GitHub Actions role ARN: arn:aws:iam::389642461024:role/DutiellyGitHubDeployRole
+```
+
+Use these account-specific policy files when creating the GitHub Actions role:
+
+- `infra/aws/github-actions-trust-policy.prod.json`
+- `infra/aws/github-actions-deploy-policy.prod.json`
+
 ## One-Time AWS State Backend
 
 Terraform state should be stored remotely so future pipeline runs update the same AWS stack.
@@ -51,9 +72,23 @@ Add these to the repository:
 - `TF_STATE_BUCKET`: S3 bucket for Terraform state.
 - `TF_STATE_LOCK_TABLE`: DynamoDB table for Terraform locking.
 
+For this production deployment, use:
+
+```text
+AWS_ROLE_TO_ASSUME=arn:aws:iam::389642461024:role/DutiellyGitHubDeployRole
+TF_STATE_BUCKET=dutielly-terraform-state-389642461024-ap-south-1
+TF_STATE_LOCK_TABLE=dutielly-terraform-locks
+```
+
 Add this GitHub Actions variable if you do not want to enter the region manually:
 
 - `AWS_REGION`: for example `ap-south-1`
+
+For this production deployment, use:
+
+```text
+AWS_REGION=ap-south-1
+```
 
 Policy templates are included here:
 
