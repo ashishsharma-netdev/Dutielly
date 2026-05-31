@@ -1,0 +1,11 @@
+{
+  "name": "Dutielly",
+  "short_name": "Dutielly",
+  "description": "Unified HRMS, attendance, payroll, ESS, manager, HR, finance, recruitment, analytics, and AI platform.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#eef6f4",
+  "theme_color": "#0f8f7a",
+  "orientation": "any",
+  "categories": ["business", "productivity", "finance"]
+}

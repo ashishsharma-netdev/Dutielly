@@ -1,0 +1,350 @@
+@page "/approvals"
+@inject IDutiellyPlatformService Platform
+
+@{
+    var claimEmployee = Platform.Employees.FirstOrDefault(item => item.Id == claimEmployeeId)
+        ?? Platform.Employees.FirstOrDefault();
+    EnsureClaimDefaults(claimEmployee);
+}
+
+<PageTitle>Dutielly Approvals</PageTitle>
+
+<section class="page-intro">
+    <div>
+        <p class="eyebrow">Manager, HR, finance, recruiter workflow</p>
+        <h2>Approve attendance, leave, expenses, shift swaps, hiring, and reimbursement</h2>
+        <p>Every action is routed by role, logged for audit, and reflected in payroll, ESS, and finance review.</p>
+    </div>
+    <div class="intro-actions">
+        <button type="button" class="btn-primary-soft" @onclick="ApproveAllManager" disabled="@(!Platform.CanApproveLeave && !Platform.CanApproveExpenses)">Approve manager queue</button>
+        <button type="button" class="btn-secondary-soft" @onclick="ShowClaimHelp" disabled="@(Platform.Employees.Count == 0 || !Platform.CanManageAttendance)">New claim form</button>
+    </div>
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Leave management</p>
+                <h3>Employee to manager to HR</h3>
+            </div>
+            <Icon Name="leaf" />
+        </div>
+        <div class="approval-list">
+            @foreach (var leave in Platform.LeaveRequests)
+            {
+                <div class="approval-item">
+                    <div>
+                        <strong>@leave.EmployeeName</strong>
+                        <p>@leave.LeaveType leave, @leave.FromDate.ToString("dd MMM") to @leave.ToDate.ToString("dd MMM")</p>
+                        <small>@leave.Reason</small>
+                    </div>
+                    <div class="approval-status">
+                        <StatusPill Text="@($"Manager: {leave.ManagerStatus}")" />
+                        <StatusPill Text="@($"HR: {leave.HrStatus}")" />
+                    </div>
+                    <div class="approval-actions">
+                        <button type="button" @onclick="() => ApproveLeaveManager(leave.Id)" disabled="@(!Platform.CanApproveLeave)">Manager approve</button>
+                        <button type="button" @onclick="() => ApproveLeaveHr(leave.Id)" disabled="@(!Platform.CanApproveLeave)">HR approve</button>
+                        <button type="button" class="danger" @onclick="() => RejectLeave(leave.Id)" disabled="@(!Platform.CanApproveLeave)">Reject</button>
+                    </div>
+                </div>
+            }
+            @if (Platform.LeaveRequests.Count == 0)
+            {
+                <div class="empty-state">No leave requests in SQL Server yet.</div>
+            }
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Expense and reimbursement</p>
+                <h3>Manager to finance</h3>
+            </div>
+            <Icon Name="card" />
+        </div>
+        <div class="approval-list">
+            @foreach (var claim in Platform.ExpenseClaims)
+            {
+                <div class="approval-item">
+                    <div>
+                        <strong>@claim.EmployeeName</strong>
+                        <p>@claim.Category, @DutiellyPlatformService.ToCurrency(claim.Amount)</p>
+                        <small>@claim.Notes</small>
+                    </div>
+                    <div class="approval-status">
+                        <StatusPill Text="@($"Manager: {claim.ManagerStatus}")" />
+                        <StatusPill Text="@($"Finance: {claim.FinanceStatus}")" />
+                    </div>
+                    <div class="approval-actions">
+                        <button type="button" @onclick="() => ApproveExpenseManager(claim.Id)" disabled="@(!Platform.CanApproveExpenses)">Manager approve</button>
+                        <button type="button" @onclick="() => ApproveExpenseFinance(claim.Id)" disabled="@(!Platform.CanApproveExpenses)">Finance approve</button>
+                    </div>
+                </div>
+            }
+            @if (Platform.ExpenseClaims.Count == 0)
+            {
+                <div class="empty-state">No expense or reimbursement claims in SQL Server yet.</div>
+            }
+        </div>
+    </article>
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Recruitment ATS</p>
+                <h3>Candidate flow</h3>
+            </div>
+            <Icon Name="briefcase" />
+        </div>
+        <div class="kanban">
+            @foreach (var stage in stages)
+            {
+                <div>
+                    <strong>@stage</strong>
+                    @foreach (var candidate in Platform.Candidates.Where(item => item.Stage == stage))
+                    {
+                        <span>@candidate.CandidateName <small>@candidate.AiScore%</small></span>
+                    }
+                    @if (!Platform.Candidates.Any(item => item.Stage == stage))
+                    {
+                        <span>No candidates</span>
+                    }
+                </div>
+            }
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Attendance regularization</p>
+                <h3>Exception routing</h3>
+            </div>
+            <Icon Name="shield" />
+        </div>
+        <div class="workflow wide">
+            @foreach (var step in Platform.GetWorkflowSteps("Attendance"))
+            {
+                <span>@step</span>
+            }
+        </div>
+        <div class="detail-list">
+            <div><span>Missed check-in</span><strong>0 pending</strong></div>
+            <div><span>Time correction</span><strong>0 pending</strong></div>
+            <div><span>Wrong attendance</span><strong>0 pending</strong></div>
+            <div><span>Shift swap</span><strong>0 requests</strong></div>
+        </div>
+    </article>
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel span-2">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Helpdesk and ticketing</p>
+                <h3>Payroll, HR, attendance, IT</h3>
+            </div>
+            <Icon Name="ticket" />
+        </div>
+        <div class="employee-table">
+            <div class="table-head">
+                <span>Category</span>
+                <span>Subject</span>
+                <span>Owner</span>
+                <span>Priority</span>
+                <span>Status</span>
+            </div>
+            @foreach (var ticket in Platform.Tickets)
+            {
+                <div class="table-row static">
+                    <span>@ticket.Category</span>
+                    <span><strong>@ticket.Subject</strong></span>
+                    <span>@ticket.Owner</span>
+                    <span><StatusPill Text="@ticket.Priority" /></span>
+                    <span>@ticket.Status</span>
+                </div>
+            }
+            @if (Platform.Tickets.Count == 0)
+            {
+                <div class="empty-state">No helpdesk tickets in SQL Server yet.</div>
+            }
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Expense intake</p>
+                <h3>New claim form</h3>
+            </div>
+            <Icon Name="card" />
+        </div>
+        <div class="form-grid single">
+            <label>
+                <span>Employee</span>
+                <select @bind="claimEmployeeId">
+                    @if (Platform.Employees.Count == 0)
+                    {
+                        <option value="">No employees in SQL Server</option>
+                    }
+                    else
+                    {
+                        <option value="">Select employee</option>
+                    }
+                    @foreach (var employee in Platform.Employees)
+                    {
+                        <option value="@employee.Id">@employee.Name</option>
+                    }
+                </select>
+            </label>
+            <label><span>Category</span><input @bind="claimCategory" placeholder="Travel, food, medical" /></label>
+            <label><span>Amount</span><input type="number" @bind="claimAmount" /></label>
+            <label><span>Notes</span><input @bind="claimNotes" placeholder="Bill or reimbursement detail" /></label>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(claimError))
+        {
+            <div class="form-error">@claimError</div>
+        }
+        <div class="intro-actions compact-actions">
+            <button type="button" class="btn-primary-soft" @onclick="SubmitExpenseClaim" disabled="@(!CanSubmitClaim)">Submit claim</button>
+            <button type="button" class="btn-secondary-soft" @onclick="ClearClaimForm">Clear</button>
+        </div>
+    </article>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="toast-line">@message</div>
+}
+
+@code {
+    private readonly string[] stages = ["Applied", "Shortlisted", "Interview", "Offer", "Hired"];
+    private string? message;
+    private string claimEmployeeId = string.Empty;
+    private string claimCategory = string.Empty;
+    private decimal claimAmount = 0;
+    private string claimNotes = string.Empty;
+    private string? claimError;
+
+    private bool CanSubmitClaim =>
+        Platform.CanManageAttendance
+        && HasText(claimEmployeeId)
+        && HasText(claimCategory)
+        && HasText(claimNotes)
+        && claimAmount > 0;
+
+    private void ApproveLeave(Guid id, string role)
+    {
+        Platform.ApproveLeave(id, role);
+        message = $"{role} approved leave request.";
+    }
+
+    private void ApproveLeaveManager(Guid id)
+    {
+        ApproveLeave(id, "Manager");
+    }
+
+    private void ApproveLeaveHr(Guid id)
+    {
+        ApproveLeave(id, "HR");
+    }
+
+    private void RejectLeave(Guid id)
+    {
+        Platform.RejectLeave(id, "Manager");
+        message = "Leave request rejected and audit event captured.";
+    }
+
+    private void ApproveExpense(Guid id, string role)
+    {
+        Platform.ApproveExpense(id, role);
+        message = $"{role} approved expense claim.";
+    }
+
+    private void ApproveExpenseManager(Guid id)
+    {
+        ApproveExpense(id, "Manager");
+    }
+
+    private void ApproveExpenseFinance(Guid id)
+    {
+        ApproveExpense(id, "Finance");
+    }
+
+    private void ApproveAllManager()
+    {
+        foreach (var leave in Platform.LeaveRequests.Where(item => item.ManagerStatus == ApprovalStatus.Pending).ToList())
+        {
+            Platform.ApproveLeave(leave.Id, "Manager");
+        }
+
+        foreach (var claim in Platform.ExpenseClaims.Where(item => item.ManagerStatus == ApprovalStatus.Pending).ToList())
+        {
+            Platform.ApproveExpense(claim.Id, "Manager");
+        }
+
+        message = "Manager queue approved across leave and expense workflows.";
+    }
+
+    private void SubmitExpenseClaim()
+    {
+        claimError = null;
+        message = null;
+        var employee = Platform.Employees.FirstOrDefault(item => item.Id == claimEmployeeId);
+        if (employee is null)
+        {
+            claimError = "Select an employee before submitting the claim.";
+            return;
+        }
+
+        if (!CanSubmitClaim)
+        {
+            claimError = "Employee, category, positive amount, and notes are required.";
+            return;
+        }
+
+        try
+        {
+            Platform.SubmitExpense(employee.Name, claimCategory, claimAmount, claimNotes);
+        }
+        catch (ArgumentException ex)
+        {
+            claimError = ex.Message;
+            return;
+        }
+
+        message = "New claim submitted and routed to manager and finance.";
+    }
+
+    private void ClearClaimForm()
+    {
+        claimCategory = string.Empty;
+        claimAmount = 0;
+        claimNotes = string.Empty;
+        claimError = null;
+        message = "Claim form cleared.";
+    }
+
+    private void ShowClaimHelp()
+    {
+        message = "Use the New claim form below. A claim is saved only after employee, category, amount, and notes are complete.";
+    }
+
+    private void EnsureClaimDefaults(EmployeeProfile? employee)
+    {
+        if (employee is not null && string.IsNullOrWhiteSpace(claimEmployeeId))
+        {
+            claimEmployeeId = employee.Id;
+        }
+    }
+
+    private static bool HasText(string value)
+    {
+        return !string.IsNullOrWhiteSpace(value);
+    }
+}

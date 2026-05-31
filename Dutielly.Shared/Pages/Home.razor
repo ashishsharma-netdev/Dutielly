@@ -1,0 +1,235 @@
+@page "/"
+@inject IDutiellyPlatformService Platform
+@inject NavigationManager Nav
+
+@{
+    var snapshot = Platform.GetSnapshot(selectedRole);
+    var selectedRoleProfile = Platform.Roles.First(role => role.Name == selectedRole);
+    var selectedCompany = Platform.CurrentTenant;
+}
+
+<PageTitle>Dutielly Command Center</PageTitle>
+
+<section class="hero-panel">
+    <div class="hero-copy">
+        <StatusPill Text="Enterprise HCM platform" />
+        <h2>Hire. Track. Pay. Grow.</h2>
+        <p>
+            A unified multi-tenant HRMS for recruitment, onboarding, attendance, payroll,
+            performance, engagement, helpdesk, analytics, and AI operations.
+        </p>
+        <div class="hero-actions">
+            <button type="button" class="btn-primary-soft" @onclick="OpenPayroll" disabled="@(!Platform.CanProcessPayroll)">Open payroll</button>
+            <button type="button" class="btn-secondary-soft" @onclick="OpenAttendance" disabled="@(!Platform.CanManageAttendance)">Open attendance</button>
+        </div>
+    </div>
+    <div class="hero-visual">
+        <img src="_content/Dutielly.Shared/images/dutielly-workforce-wallpaper.png" alt="Dutielly workforce platform illustration" />
+    </div>
+</section>
+
+<section class="control-strip">
+    <label>
+        <span>Company</span>
+        <select @bind="SelectedCompanyId">
+            @if (Platform.Companies.Count == 0)
+            {
+                <option value="">No companies in SQL Server</option>
+            }
+            @foreach (var company in Platform.Companies)
+            {
+                <option value="@company.Id">@company.Name</option>
+            }
+        </select>
+    </label>
+    <div class="company-summary">
+        @if (selectedCompany is null)
+        {
+            <strong>@Platform.DataSourceName</strong>
+            <span>@Platform.DataSourceStatus</span>
+        }
+        else
+        {
+            <strong>@selectedCompany.Industry</strong>
+            <span>@selectedCompany.City, @selectedCompany.Branches branches, @selectedCompany.Locations locations</span>
+        }
+    </div>
+    <label>
+        <span>Role workspace</span>
+        <select @bind="selectedRole">
+            @foreach (var role in Platform.Roles)
+            {
+                <option value="@role.Name">@role.Name</option>
+            }
+        </select>
+    </label>
+</section>
+
+<section class="role-band">
+    <div>
+        <p class="eyebrow">Active role</p>
+        <h3>@selectedRoleProfile.Name</h3>
+        <p>@selectedRoleProfile.Summary</p>
+    </div>
+    <div class="capability-list">
+        @foreach (var capability in selectedRoleProfile.Capabilities)
+        {
+            <span>@capability</span>
+        }
+    </div>
+</section>
+
+<section class="metric-grid">
+    @foreach (var metric in snapshot.Metrics)
+    {
+        <article class="metric-card @metric.Tone">
+            <Icon Name="@metric.Icon" />
+            <span>@metric.Label</span>
+            <strong>@metric.Value</strong>
+            <small>@metric.Delta</small>
+        </article>
+    }
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel span-2">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Platform coverage</p>
+                <h3>Modules mapped from requirements</h3>
+            </div>
+            <input class="search-input" placeholder="Search modules" @bind="moduleFilter" @bind:event="oninput" />
+        </div>
+        <div class="module-grid">
+            @foreach (var module in FilteredModules.Take(12))
+            {
+                <div class="module-card">
+                    <Icon Name="@module.Icon" />
+                    <div>
+                        <strong>@module.Name</strong>
+                        <span>@module.Area</span>
+                        <p>@module.Description</p>
+                        <div class="tag-row">
+                            @foreach (var feature in module.Features.Take(3))
+                            {
+                                <em>@feature</em>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">AI operations</p>
+                <h3>Priority insights</h3>
+            </div>
+            <Icon Name="brain" />
+        </div>
+        <div class="insight-list">
+            @foreach (var insight in snapshot.Insights)
+            {
+                <div class="insight-item">
+                    <StatusPill Text="@insight.Severity" />
+                    <strong>@insight.Title</strong>
+                    <p>@insight.Body</p>
+                    <small>@insight.Action</small>
+                </div>
+            }
+        </div>
+    </article>
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Today</p>
+                <h3>Live workforce</h3>
+            </div>
+            <StatusPill Text="@($"{snapshot.AttendanceRate:0.#}% present")" />
+        </div>
+        <div class="timeline">
+            @if (Platform.AttendanceLogs.Count == 0)
+            {
+                <div class="empty-state">No attendance logs yet. Create employees in SQL Server, then capture check-ins from web or mobile.</div>
+            }
+            @foreach (var log in Platform.AttendanceLogs.Take(5))
+            {
+                <div class="timeline-row">
+                    <span></span>
+                    <div>
+                        <strong>@log.EmployeeName</strong>
+                        <p>@log.Method at @log.Location</p>
+                    </div>
+                    <small>@log.CheckIn.ToString("HH:mm")</small>
+                </div>
+            }
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Payroll</p>
+                <h3>@snapshot.Payroll.Month</h3>
+            </div>
+            <StatusPill Text="@snapshot.Payroll.Status" />
+        </div>
+        <div class="payroll-stack">
+            <div><span>Employees</span><strong>@snapshot.Payroll.Employees</strong></div>
+            <div><span>Gross</span><strong>@DutiellyPlatformService.ToCurrency(snapshot.Payroll.GrossPay)</strong></div>
+            <div><span>Deductions</span><strong>@DutiellyPlatformService.ToCurrency(snapshot.Payroll.Deductions)</strong></div>
+            <div><span>Net payable</span><strong>@DutiellyPlatformService.ToCurrency(snapshot.Payroll.NetPay)</strong></div>
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Workflow builder</p>
+                <h3>Payroll flow</h3>
+            </div>
+            <Icon Name="layers" />
+        </div>
+        <div class="workflow">
+            @foreach (var step in Platform.GetWorkflowSteps("Payroll"))
+            {
+                <span>@step</span>
+            }
+        </div>
+    </article>
+</section>
+
+@code {
+    private string selectedRole = "HR Manager";
+    private string moduleFilter = string.Empty;
+
+    private string SelectedCompanyId
+    {
+        get => Platform.CurrentTenantId;
+        set => Platform.CurrentTenantId = value;
+    }
+
+    private IEnumerable<PlatformModule> FilteredModules =>
+        string.IsNullOrWhiteSpace(moduleFilter)
+            ? Platform.Modules
+            : Platform.Modules.Where(module =>
+                module.Name.Contains(moduleFilter, StringComparison.OrdinalIgnoreCase)
+                || module.Area.Contains(moduleFilter, StringComparison.OrdinalIgnoreCase)
+                || module.Description.Contains(moduleFilter, StringComparison.OrdinalIgnoreCase)
+                || module.Features.Any(feature => feature.Contains(moduleFilter, StringComparison.OrdinalIgnoreCase)));
+
+    private void OpenPayroll()
+    {
+        Nav.NavigateTo("/payroll");
+    }
+
+    private void OpenAttendance()
+    {
+        Nav.NavigateTo("/attendance");
+    }
+}

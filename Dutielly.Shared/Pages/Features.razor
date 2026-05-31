@@ -1,0 +1,106 @@
+@page "/features"
+@inject IDutiellyPlatformService Platform
+
+<PageTitle>Dutielly Feature Matrix</PageTitle>
+
+<section class="page-intro">
+    <div>
+        <p class="eyebrow">Requirement comparison</p>
+        <h2>Feature coverage matrix</h2>
+        <p>The module catalog below reflects the active HRMS, attendance, payroll, mobile, AI, security, reporting, and enterprise scope for the selected SQL Server tenant.</p>
+    </div>
+    <div class="intro-actions">
+        <button type="button" class="btn-primary-soft" @onclick="ShowSummary">Show coverage summary</button>
+    </div>
+</section>
+
+<section class="control-strip">
+    <label>
+        <span>Area</span>
+        <select @bind="areaFilter">
+            <option value="">All areas</option>
+            @foreach (var area in Platform.Modules.Select(module => module.Area).Distinct().OrderBy(area => area))
+            {
+                <option value="@area">@area</option>
+            }
+        </select>
+    </label>
+    <input class="search-input" placeholder="Search requirement, feature, module" @bind="search" @bind:event="oninput" />
+    <div class="company-summary">
+        <strong>@FilteredModules.Count() modules visible</strong>
+        <span>@Platform.Modules.Count total requirement modules</span>
+    </div>
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel span-2">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Mapped modules</p>
+                <h3>MVP plus enterprise-ready scope</h3>
+            </div>
+            <StatusPill Text="Requirement mapped" />
+        </div>
+        <div class="module-grid">
+            @foreach (var module in FilteredModules)
+            {
+                <div class="module-card">
+                    <Icon Name="@module.Icon" />
+                    <div>
+                        <strong>@module.Name</strong>
+                        <span>@module.Area</span>
+                        <p>@module.Description</p>
+                        <div class="tag-row">
+                            @foreach (var feature in module.Features)
+                            {
+                                <em>@feature</em>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Data readiness</p>
+                <h3>SQL Server status</h3>
+            </div>
+            <Icon Name="bank" />
+        </div>
+        <div class="detail-list">
+            <div><span>Source</span><strong>@Platform.DataSourceName</strong></div>
+            <div><span>Status</span><strong>@Platform.DataSourceStatus</strong></div>
+            <div><span>Companies</span><strong>@Platform.Companies.Count</strong></div>
+            <div><span>Employees</span><strong>@Platform.Employees.Count</strong></div>
+            <div><span>Attendance</span><strong>@Platform.AttendanceLogs.Count</strong></div>
+            <div><span>Payroll runs</span><strong>@Platform.PayrollHistory.Count</strong></div>
+        </div>
+    </article>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="toast-line">@message</div>
+}
+
+@code {
+    private string areaFilter = string.Empty;
+    private string search = string.Empty;
+    private string? message;
+
+    private IEnumerable<PlatformModule> FilteredModules => Platform.Modules
+        .Where(module => string.IsNullOrWhiteSpace(areaFilter) || module.Area == areaFilter)
+        .Where(module => string.IsNullOrWhiteSpace(search)
+            || module.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || module.Area.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || module.Description.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || module.Features.Any(feature => feature.Contains(search, StringComparison.OrdinalIgnoreCase)));
+
+    private void ShowSummary()
+    {
+        message = $"Compared requirements are represented by {Platform.Modules.Count} modules across {Platform.Modules.Select(module => module.Area).Distinct().Count()} areas.";
+    }
+}

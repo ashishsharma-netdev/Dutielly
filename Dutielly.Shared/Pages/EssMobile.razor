@@ -1,0 +1,334 @@
+@page "/ess"
+@inject IDutiellyPlatformService Platform
+
+@{
+    var employee = Platform.Employees.FirstOrDefault(item => item.Id == selectedEmployeeId)
+        ?? Platform.Employees.FirstOrDefault();
+    EnsureEssDefaults(employee);
+}
+
+<PageTitle>Dutielly ESS Mobile</PageTitle>
+
+<section class="page-intro">
+    <div>
+        <p class="eyebrow">Employee and manager app</p>
+        <h2>Attendance, leave, claims, notifications, and approvals</h2>
+        <p>The same Blazor interface is packaged for web, Android, and Windows desktop so employees and managers can use one consistent experience.</p>
+    </div>
+    <div class="intro-actions">
+        <button type="button" class="btn-primary-soft" @onclick="MobileCheckIn" disabled="@(!CanMobileCheckIn)">Mobile check-in</button>
+        <button type="button" class="btn-secondary-soft" @onclick="ApplyLeave" disabled="@(!CanApplyLeave)">Apply leave</button>
+    </div>
+</section>
+
+<section class="dashboard-grid mobile-preview-layout">
+    <article class="phone-frame">
+        <div class="phone-screen">
+            <div class="phone-top">
+                <span>9:41</span>
+                <strong>Dutielly</strong>
+                <span>5G</span>
+            </div>
+            <div class="mobile-hero">
+                <div class="avatar">@GetInitials(employee?.Name ?? "DU")</div>
+                <div>
+                    <small>Welcome back</small>
+                    <strong>@(employee?.Name ?? "No employee selected")</strong>
+                    <span>@(employee?.Role ?? "Connect SQL Server and create an employee")</span>
+                </div>
+            </div>
+            <div class="mobile-checkin">
+                <Icon Name="map" />
+                <strong>@mobileStatus</strong>
+                <span>@(employee?.Location ?? "No location configured")</span>
+            </div>
+            <div class="mobile-grid">
+                <button type="button" @onclick="MobileCheckIn" disabled="@(!CanMobileCheckIn)"><Icon Name="clock" /> Attendance</button>
+                <button type="button" @onclick="ApplyLeave" disabled="@(!CanApplyLeave)"><Icon Name="leaf" /> Leave</button>
+                <button type="button" @onclick="SubmitClaim" disabled="@(!CanSubmitClaim)"><Icon Name="card" /> Claims</button>
+                <button type="button" @onclick="OpenTickets" disabled="@(employee is null)"><Icon Name="ticket" /> Tickets</button>
+            </div>
+            <div class="mobile-card">
+                <strong>Notifications</strong>
+                <p>@notification</p>
+            </div>
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">ESS controls</p>
+                <h3>Employee self-service</h3>
+            </div>
+            <Icon Name="phone" />
+        </div>
+        <div class="form-grid single">
+            <label>
+                <span>Employee</span>
+                <select @bind="selectedEmployeeId">
+                    @if (Platform.Employees.Count == 0)
+                    {
+                        <option value="">No employees in SQL Server</option>
+                    }
+                    else
+                    {
+                        <option value="">Select employee</option>
+                    }
+                    @foreach (var item in Platform.Employees)
+                    {
+                        <option value="@item.Id">@item.Name</option>
+                    }
+                </select>
+            </label>
+            <label>
+                <span>Leave type</span>
+                <select @bind="leaveType">
+                    <option>Casual</option>
+                    <option>Sick</option>
+                    <option>Earned</option>
+                    <option>Maternity</option>
+                    <option>Paternity</option>
+                    <option>Comp Off</option>
+                    <option>LOP</option>
+                </select>
+            </label>
+            <label><span>Leave from</span><input type="date" @bind="leaveFromDate" @bind:format="yyyy-MM-dd" /></label>
+            <label><span>Leave to</span><input type="date" @bind="leaveToDate" @bind:format="yyyy-MM-dd" /></label>
+            <label><span>Leave reason</span><input @bind="leaveReason" placeholder="Reason for leave" /></label>
+            <label><span>Claim category</span><input @bind="claimCategory" placeholder="Travel, food, medical" /></label>
+            <label><span>Claim amount</span><input type="number" @bind="claimAmount" /></label>
+            <label><span>Claim notes</span><input @bind="claimNotes" placeholder="Bill or claim details" /></label>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(formError))
+        {
+            <div class="form-error">@formError</div>
+        }
+        <div class="detail-list">
+            <div><span>Leave balance</span><strong>@(employee is null ? "No employee" : $"{employee.LeaveBalance} days")</strong></div>
+            <div><span>Claims</span><strong>@Platform.ExpenseClaims.Count active claims</strong></div>
+            <div><span>Tickets</span><strong>@Platform.Tickets.Count open tickets</strong></div>
+            <div><span>Profile</span><strong>@(employee?.Status ?? "No employee")</strong></div>
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Manager mobile</p>
+                <h3>Team approvals</h3>
+            </div>
+            <Icon Name="team" />
+        </div>
+        <div class="approval-list tight">
+            <div class="approval-item">
+                <strong>Attendance exceptions</strong>
+                <p>0 requests waiting for manager approval.</p>
+                <StatusPill Text="Pending" />
+            </div>
+            <div class="approval-item">
+                <strong>Leave approvals</strong>
+                <p>@Platform.LeaveRequests.Count requests in the workflow.</p>
+                <StatusPill Text="Pending" />
+            </div>
+            <div class="approval-item">
+                <strong>Expense approvals</strong>
+                <p>@Platform.ExpenseClaims.Count claims routed to manager and finance.</p>
+                <StatusPill Text="Pending" />
+            </div>
+        </div>
+    </article>
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel span-2">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Package targets</p>
+                <h3>Supported shells</h3>
+            </div>
+            <Icon Name="layers" />
+        </div>
+        <div class="detail-list">
+            <div><span>Web</span><strong>ASP.NET Core app</strong></div>
+            <div><span>Android</span><strong>MAUI APK target</strong></div>
+            <div><span>Windows</span><strong>Native desktop EXE</strong></div>
+        </div>
+    </article>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="toast-line">@message</div>
+}
+
+@code {
+    private string selectedEmployeeId = string.Empty;
+    private string leaveType = "Casual";
+    private DateTime leaveFromDate = DateTime.Today.AddDays(1);
+    private DateTime leaveToDate = DateTime.Today.AddDays(1);
+    private string leaveReason = string.Empty;
+    private string claimCategory = string.Empty;
+    private decimal claimAmount = 0;
+    private string claimNotes = string.Empty;
+    private string mobileStatus = "Ready to check in";
+    private string notification = "Ready for employee self-service actions.";
+    private string? message;
+    private string? formError;
+
+    private bool CanMobileCheckIn =>
+        Platform.CanManageAttendance
+        && HasText(selectedEmployeeId)
+        && HasText(employeeLocation());
+
+    private bool CanApplyLeave =>
+        Platform.CanManageAttendance
+        && HasText(selectedEmployeeId)
+        && HasText(leaveType)
+        && HasText(leaveReason)
+        && leaveToDate.Date >= leaveFromDate.Date;
+
+    private bool CanSubmitClaim =>
+        Platform.CanManageAttendance
+        && HasText(selectedEmployeeId)
+        && HasText(claimCategory)
+        && HasText(claimNotes)
+        && claimAmount > 0;
+
+    private void MobileCheckIn()
+    {
+        formError = null;
+        message = null;
+        if (string.IsNullOrWhiteSpace(selectedEmployeeId))
+        {
+            formError = "Select an employee before mobile check-in.";
+            return;
+        }
+
+        AttendanceLog? log;
+        try
+        {
+            log = Platform.CheckIn(selectedEmployeeId, "Mobile Check-In", employeeLocation());
+        }
+        catch (ArgumentException ex)
+        {
+            formError = ex.Message;
+            return;
+        }
+
+        if (log is null)
+        {
+            message = "Mobile check-in could not be captured because the employee record was not found.";
+            return;
+        }
+
+        mobileStatus = $"Checked in at {log.CheckIn:HH:mm}";
+        notification = "Mobile check-in completed and attendance audit saved.";
+        message = $"{log.EmployeeName} checked in from the employee mobile app.";
+    }
+
+    private void ApplyLeave()
+    {
+        formError = null;
+        message = null;
+        if (string.IsNullOrWhiteSpace(selectedEmployeeId))
+        {
+            formError = "Select an employee before applying leave.";
+            return;
+        }
+
+        if (!CanApplyLeave)
+        {
+            formError = "Select valid leave dates and enter a leave reason.";
+            return;
+        }
+
+        LeaveRequest? leave;
+        try
+        {
+            leave = Platform.ApplyLeave(
+                selectedEmployeeId,
+                leaveType,
+                DateOnly.FromDateTime(leaveFromDate),
+                DateOnly.FromDateTime(leaveToDate),
+                leaveReason);
+        }
+        catch (ArgumentException ex)
+        {
+            formError = ex.Message;
+            return;
+        }
+
+        if (leave is null)
+        {
+            message = "Leave request could not be submitted because the employee record was not found.";
+            return;
+        }
+
+        notification = $"{leave.LeaveType} leave sent to manager and HR.";
+        message = notification;
+    }
+
+    private void SubmitClaim()
+    {
+        formError = null;
+        message = null;
+        var selected = Platform.Employees.FirstOrDefault(item => item.Id == selectedEmployeeId);
+        if (selected is null)
+        {
+            formError = "Select an employee before submitting a claim.";
+            return;
+        }
+
+        if (!CanSubmitClaim)
+        {
+            formError = "Enter claim category, positive amount, and notes before submitting.";
+            return;
+        }
+
+        try
+        {
+            Platform.SubmitExpense(selected.Name, claimCategory, claimAmount, claimNotes);
+        }
+        catch (ArgumentException ex)
+        {
+            formError = ex.Message;
+            return;
+        }
+
+        notification = "Claim uploaded and routed to manager and finance.";
+        message = notification;
+    }
+
+    private void OpenTickets()
+    {
+        notification = "Helpdesk ticket list is ready for employee follow-up.";
+        message = notification;
+    }
+
+    private string employeeLocation()
+    {
+        return Platform.Employees.FirstOrDefault(item => item.Id == selectedEmployeeId)?.Location ?? string.Empty;
+    }
+
+    private void EnsureEssDefaults(EmployeeProfile? employee)
+    {
+        if (employee is not null && string.IsNullOrWhiteSpace(selectedEmployeeId))
+        {
+            selectedEmployeeId = employee.Id;
+        }
+    }
+
+    private static string GetInitials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 0
+            ? "DU"
+            : string.Concat(parts.Take(2).Select(part => part[0])).ToUpperInvariant();
+    }
+
+    private static bool HasText(string value)
+    {
+        return !string.IsNullOrWhiteSpace(value);
+    }
+}

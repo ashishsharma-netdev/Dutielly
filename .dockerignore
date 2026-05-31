@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+.android-sdk/
+.git/
+.vs/
+artifacts/
+infra/aws/terraform/.terraform/
+infra/aws/terraform/*.tfstate
+infra/aws/terraform/*.tfstate.*
+*.user
+*.suo

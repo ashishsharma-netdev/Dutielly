@@ -1,0 +1,106 @@
+name: Deploy Dutielly Web To AWS
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "prod"
+      aws_region:
+        description: "AWS region"
+        required: true
+        default: "ap-south-1"
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  APP_NAME: dutielly
+  ENVIRONMENT: ${{ github.event.inputs.environment || 'prod' }}
+  AWS_REGION: ${{ github.event.inputs.aws_region || vars.AWS_REGION || 'ap-south-1' }}
+  TF_IN_AUTOMATION: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check deployment secrets
+        env:
+          AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          TF_STATE_LOCK_TABLE: ${{ secrets.TF_STATE_LOCK_TABLE }}
+        run: |
+          test -n "$AWS_ROLE_TO_ASSUME" || (echo "Missing AWS_ROLE_TO_ASSUME secret" && exit 1)
+          test -n "$TF_STATE_BUCKET" || (echo "Missing TF_STATE_BUCKET secret" && exit 1)
+          test -n "$TF_STATE_LOCK_TABLE" || (echo "Missing TF_STATE_LOCK_TABLE secret" && exit 1)
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Build web project
+        run: dotnet build Dutielly.Web/Dutielly.Web.csproj -c Release
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform init
+        working-directory: infra/aws/terraform
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=dutielly/${ENVIRONMENT}/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_STATE_LOCK_TABLE }}"
+
+      - name: Ensure ECR repository exists
+        working-directory: infra/aws/terraform
+        run: |
+          terraform apply -auto-approve \
+            -target=aws_ecr_repository.app \
+            -target=aws_ecr_lifecycle_policy.app \
+            -var="aws_region=${AWS_REGION}" \
+            -var="environment=${ENVIRONMENT}" \
+            -var="app_name=${APP_NAME}" \
+            -var="image_tag=${GITHUB_SHA}"
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        working-directory: .
+        run: |
+          ECR_REPOSITORY_URL="$(terraform -chdir=infra/aws/terraform output -raw ecr_repository_url)"
+          docker build -f Dockerfile -t "${ECR_REPOSITORY_URL}:${GITHUB_SHA}" .
+          docker push "${ECR_REPOSITORY_URL}:${GITHUB_SHA}"
+
+      - name: Deploy infrastructure and App Runner service
+        working-directory: infra/aws/terraform
+        run: |
+          terraform apply -auto-approve \
+            -var="aws_region=${AWS_REGION}" \
+            -var="environment=${ENVIRONMENT}" \
+            -var="app_name=${APP_NAME}" \
+            -var="image_tag=${GITHUB_SHA}"
+
+      - name: Print service URL
+        working-directory: infra/aws/terraform
+        run: terraform output apprunner_service_url

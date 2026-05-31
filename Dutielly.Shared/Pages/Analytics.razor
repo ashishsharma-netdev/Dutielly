@@ -1,0 +1,153 @@
+@page "/analytics"
+@inject IDutiellyPlatformService Platform
+
+@{
+    var snapshot = Platform.GetSnapshot("HR Manager");
+    var departmentGroups = Platform.Employees
+        .GroupBy(employee => employee.Department)
+        .Select(group => new { Department = group.Key, Count = group.Count(), AvgUtilization = group.Average(employee => employee.Utilization) })
+        .OrderByDescending(item => item.Count)
+        .ToList();
+}
+
+<PageTitle>Dutielly Analytics</PageTitle>
+
+<section class="page-intro">
+    <div>
+        <p class="eyebrow">Reports, analytics, and AI forecast</p>
+        <h2>Headcount, attrition, hiring, attendance, payroll cost, and workforce trends</h2>
+        <p>Give HR, managers, payroll, finance, and leadership one view of workforce health with export-ready reporting.</p>
+    </div>
+    <div class="intro-actions">
+        <button type="button" class="btn-primary-soft" @onclick="GenerateReport">Preview report pack</button>
+        <button type="button" class="btn-secondary-soft" @onclick="AskForecast">Ask AI forecast</button>
+    </div>
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel span-2">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Headcount analytics</p>
+                <h3>Department mix and utilization</h3>
+            </div>
+            <StatusPill Text="@($"{snapshot.ActiveEmployees} active")" />
+        </div>
+        <div class="bar-chart">
+            @foreach (var group in departmentGroups)
+            {
+                <div class="bar-row">
+                    <span>@group.Department</span>
+                    <div><i style="width:@(Math.Max(18, group.AvgUtilization))%"></i></div>
+                    <strong>@group.Count</strong>
+                </div>
+            }
+            @if (departmentGroups.Count == 0)
+            {
+                <div class="empty-state">No employee records available for headcount analytics.</div>
+            }
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">AI risk radar</p>
+                <h3>Predictive alerts</h3>
+            </div>
+            <Icon Name="brain" />
+        </div>
+        <div class="insight-list">
+            @foreach (var insight in Platform.GetInsights("Super Admin"))
+            {
+                <div class="insight-item">
+                    <StatusPill Text="@insight.Severity" />
+                    <strong>@insight.Title</strong>
+                    <p>@insight.Body</p>
+                </div>
+            }
+        </div>
+    </article>
+</section>
+
+<section class="metric-grid">
+    <article class="metric-card neutral"><Icon Name="clock" /><span>Late arrivals</span><strong>0</strong><small>Awaiting attendance</small></article>
+    <article class="metric-card neutral"><Icon Name="leaf" /><span>Absenteeism</span><strong>0%</strong><small>Awaiting leave data</small></article>
+    <article class="metric-card neutral"><Icon Name="briefcase" /><span>Hiring funnel</span><strong>@Platform.Candidates.Count</strong><small>Active candidates</small></article>
+    <article class="metric-card neutral"><Icon Name="wallet" /><span>Payroll trend</span><strong>0%</strong><small>Awaiting payroll runs</small></article>
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Attendance analytics</p>
+                <h3>Weekly signal</h3>
+            </div>
+            <Icon Name="chart" />
+        </div>
+        <div class="mini-bars">
+            <span style="height:4%"></span>
+            <span style="height:4%"></span>
+            <span style="height:4%"></span>
+            <span style="height:4%"></span>
+            <span style="height:4%"></span>
+            <span style="height:4%"></span>
+            <span style="height:4%"></span>
+        </div>
+        <div class="weekday-row"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Payroll analytics</p>
+                <h3>Cost split</h3>
+            </div>
+            <Icon Name="wallet" />
+        </div>
+        <div class="donut-summary">
+            <div class="donut empty-donut"></div>
+            <div class="detail-list">
+                <div><span>Earnings</span><strong>0%</strong></div>
+                <div><span>Deductions</span><strong>0%</strong></div>
+                <div><span>Benefits</span><strong>0%</strong></div>
+            </div>
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Export center</p>
+                <h3>Reports</h3>
+            </div>
+            <Icon Name="receipt" />
+        </div>
+        <div class="toggle-list">
+            <label><input type="checkbox" checked /><span>HR headcount report</span></label>
+            <label><input type="checkbox" checked /><span>Attendance exceptions</span></label>
+            <label><input type="checkbox" checked /><span>Payroll cost report</span></label>
+            <label><input type="checkbox" checked /><span>Payroll summary report</span></label>
+        </div>
+    </article>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="toast-line">@message</div>
+}
+
+@code {
+    private string? message;
+
+    private void GenerateReport()
+    {
+        message = "Report preview refreshed for HR analytics, attendance exceptions, payroll cost, and workforce summary.";
+    }
+
+    private void AskForecast()
+    {
+        message = Platform.AskAssistant("payroll forecast and attrition risk");
+    }
+}

@@ -1,0 +1,56 @@
+@inherits LayoutComponentBase
+@inject IFormFactor FormFactor
+@inject IDutiellyPlatformService Platform
+
+<div class="shell">
+    <aside class="sidebar">
+        <NavMenu />
+    </aside>
+
+    <main class="workspace">
+        <header class="topbar">
+            <div>
+                <p class="eyebrow">Unified HRMS, Attendance, Payroll</p>
+                <h1>Dutielly Command Center</h1>
+            </div>
+            <div class="topbar-actions">
+                <label class="tenant-switcher">
+                    <span>Tenant</span>
+                    <select @bind="SelectedTenantId">
+                        @if (Platform.Companies.Count == 0)
+                        {
+                            <option value="">No tenant</option>
+                        }
+                        @foreach (var company in Platform.Companies)
+                        {
+                            <option value="@company.Id">@company.Name</option>
+                        }
+                    </select>
+                </label>
+                <span class="platform-chip">@Platform.CurrentUserName</span>
+                <span class="platform-chip">@Platform.CurrentUserRole</span>
+                <a class="platform-chip signout-chip" href="/logout">Sign out</a>
+                <span class="platform-chip">@FormFactor.GetFormFactor()</span>
+                <span class="platform-chip">India compliance ready</span>
+            </div>
+        </header>
+
+        <article class="content">
+            @Body
+        </article>
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">x</span>
+</div>
+
+@code {
+    private string SelectedTenantId
+    {
+        get => Platform.CurrentTenantId;
+        set => Platform.CurrentTenantId = value;
+    }
+}

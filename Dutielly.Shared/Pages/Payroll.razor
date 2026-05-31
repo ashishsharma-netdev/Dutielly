@@ -1,0 +1,223 @@
+@page "/payroll"
+@inject IDutiellyPlatformService Platform
+
+@{
+    EnsurePayrollDefaults();
+    var payroll = Platform.PayrollHistory.FirstOrDefault() ?? new PayrollRun
+    {
+        Month = DateTime.Now.ToString("MMMM yyyy"),
+        Employees = Platform.Employees.Count,
+        Status = "Not started"
+    };
+    var annualCtc = Platform.Employees.Sum(employee => employee.MonthlyCtc) * 12;
+    var basic = Math.Round(monthlySalary * NormalizedBasicPercent / 100m);
+    var allowances = monthlySalary - basic;
+    var deductions = Math.Round(monthlySalary * NormalizedDeductionPercent / 100m);
+    var net = monthlySalary - deductions;
+}
+
+<PageTitle>Dutielly Payroll</PageTitle>
+
+<section class="page-intro">
+    <div>
+        <p class="eyebrow">Payroll</p>
+        <h2>Tenant payroll runs, salary totals, deduction estimates, and release control</h2>
+        <p>Process monthly payroll with employee salary totals, simple deductions, approval-ready preview, lock status, and release history.</p>
+    </div>
+    <div class="intro-actions">
+        <button type="button" class="btn-primary-soft" @onclick="ProcessPayroll" disabled="@(!CanProcessPayroll)">Process payroll</button>
+        <button type="button" class="btn-secondary-soft" @onclick="ReleasePayroll" disabled="@(Platform.PayrollHistory.Count == 0 || !Platform.CanProcessPayroll)">Release payroll</button>
+    </div>
+</section>
+
+<section class="metric-grid">
+    <article class="metric-card good"><Icon Name="wallet" /><span>Net payable</span><strong>@DutiellyPlatformService.ToCurrency(payroll.NetPay)</strong><small>@payroll.Month</small></article>
+    <article class="metric-card neutral"><Icon Name="people" /><span>Employees</span><strong>@payroll.Employees</strong><small>Payroll eligible</small></article>
+    <article class="metric-card watch"><Icon Name="scale" /><span>Deductions</span><strong>@DutiellyPlatformService.ToCurrency(payroll.Deductions)</strong><small>Estimated payroll deduction</small></article>
+    <article class="metric-card good"><Icon Name="receipt" /><span>Annual CTC</span><strong>@DutiellyPlatformService.ToCurrency(annualCtc)</strong><small>Forecast base</small></article>
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Salary structure engine</p>
+                <h3>Formula builder</h3>
+            </div>
+            <Icon Name="formula" />
+        </div>
+        <div class="form-grid single">
+            <label><span>Monthly salary</span><input type="number" @bind="monthlySalary" /></label>
+            <label><span>Basic %</span><input type="number" @bind="basicPercent" /></label>
+            <label><span>Allowance %</span><input type="number" value="@(100m - NormalizedBasicPercent)" disabled /></label>
+            <label><span>Deduction %</span><input type="number" @bind="deductionPercent" /></label>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(formError))
+        {
+            <div class="form-error">@formError</div>
+        }
+        <div class="payroll-stack">
+            <div><span>Basic</span><strong>@DutiellyPlatformService.ToCurrency(basic)</strong></div>
+            <div><span>Allowances</span><strong>@DutiellyPlatformService.ToCurrency(allowances)</strong></div>
+            <div><span>Estimated deductions</span><strong>@DutiellyPlatformService.ToCurrency(deductions)</strong></div>
+            <div><span>Net salary</span><strong>@DutiellyPlatformService.ToCurrency(net)</strong></div>
+        </div>
+    </article>
+
+    <article class="panel span-2">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Payroll register</p>
+                <h3>Monthly runs</h3>
+            </div>
+            <StatusPill Text="@payroll.Status" />
+        </div>
+        <div class="employee-table">
+            <div class="table-head">
+                <span>Month</span>
+                <span>Employees</span>
+                <span>Gross</span>
+                <span>Deductions</span>
+                <span>Net</span>
+                <span>Status</span>
+            </div>
+            @foreach (var run in Platform.PayrollHistory.Take(6))
+            {
+                <div class="table-row static">
+                    <span><strong>@run.Month</strong><small>@run.UpdatedAt.ToString("dd MMM yyyy HH:mm")</small></span>
+                    <span>@run.Employees</span>
+                    <span>@DutiellyPlatformService.ToCurrency(run.GrossPay)</span>
+                    <span>@DutiellyPlatformService.ToCurrency(run.Deductions)</span>
+                    <span>@DutiellyPlatformService.ToCurrency(run.NetPay)</span>
+                    <span><StatusPill Text="@run.Status" /></span>
+                </div>
+            }
+            @if (Platform.PayrollHistory.Count == 0)
+            {
+                <div class="empty-state">No payroll runs yet. Add employees and salary structures, then process payroll.</div>
+            }
+        </div>
+    </article>
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Payroll controls</p>
+                <h3>Release checklist</h3>
+            </div>
+            <Icon Name="scale" />
+        </div>
+        <div class="compliance-grid">
+            <div><strong>Employees</strong><span>Reviewed</span></div>
+            <div><strong>Salaries</strong><span>Checked</span></div>
+            <div><strong>Deductions</strong><span>Estimated</span></div>
+            <div><strong>Approvals</strong><span>Pending</span></div>
+            <div><strong>Lock</strong><span>Controlled</span></div>
+            <div><strong>Audit</strong><span>SQL table ready</span></div>
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Deduction summary</p>
+                <h3>Payroll adjustments</h3>
+            </div>
+            <Icon Name="bank" />
+        </div>
+        <div class="detail-list">
+            <div><span>Manual deductions</span><strong>0 employees</strong></div>
+            <div><span>Monthly adjustment</span><strong>Rs 0</strong></div>
+            <div><span>Reimbursement input</span><strong>@Platform.ExpenseClaims.Count claims</strong></div>
+            <div><span>Approval state</span><strong>Awaiting review</strong></div>
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Release status</p>
+                <h3>Payroll workflow</h3>
+            </div>
+            <Icon Name="plug" />
+        </div>
+        <div class="workflow">
+            <span>Preview totals</span>
+            <span>Approve run</span>
+            <span>Lock payroll</span>
+            <span>Release status</span>
+        </div>
+    </article>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="toast-line">@message</div>
+}
+
+@code {
+    private decimal monthlySalary = 0;
+    private decimal basicPercent = 40;
+    private decimal deductionPercent = 10;
+    private string? message;
+    private string? formError;
+
+    private decimal NormalizedBasicPercent => Math.Clamp(basicPercent, 0, 100);
+    private decimal NormalizedDeductionPercent => Math.Clamp(deductionPercent, 0, 100);
+
+    private bool CanProcessPayroll =>
+        Platform.CanProcessPayroll
+        && Platform.Employees.Count > 0
+        && monthlySalary >= 0
+        && basicPercent >= 0
+        && basicPercent <= 100
+        && deductionPercent >= 0
+        && deductionPercent <= 100;
+
+    private void ProcessPayroll()
+    {
+        formError = null;
+        message = null;
+        if (!CanProcessPayroll)
+        {
+            formError = "Add employees and keep salary percentages between 0 and 100 before processing payroll.";
+            return;
+        }
+
+        try
+        {
+            var run = Platform.ProcessPayroll();
+            message = $"{run.Month} payroll processed and locked.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            formError = ex.Message;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            formError = ex.Message;
+        }
+    }
+
+    private void ReleasePayroll()
+    {
+        if (Platform.PayrollHistory.Count == 0)
+        {
+            message = "No payroll run is available to release.";
+            return;
+        }
+
+        Platform.ReleaseLatestPayroll();
+        message = "Latest payroll released for the selected tenant.";
+    }
+
+    private void EnsurePayrollDefaults()
+    {
+        if (monthlySalary <= 0)
+        {
+            monthlySalary = Platform.Employees.FirstOrDefault(employee => employee.MonthlyCtc > 0)?.MonthlyCtc ?? 0;
+        }
+    }
+}

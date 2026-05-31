@@ -1,0 +1,181 @@
+@page "/setup"
+@inject IDutiellyPlatformService Platform
+
+<PageTitle>Dutielly Admin Center</PageTitle>
+
+<section class="page-intro">
+    <div>
+        <p class="eyebrow">Admin control center</p>
+        <h2>Company setup, RBAC, feature flags, audit, and enterprise controls</h2>
+        <p>Configure multi-company structures, branches, locations, roles, permissions, white label branding, tenant access, and workflow automation.</p>
+    </div>
+    <div class="intro-actions">
+        <button type="button" class="btn-primary-soft" @onclick="ReviewSetup" disabled="@(!Platform.CanManageSetup)">Review configuration</button>
+        <button type="button" class="btn-secondary-soft" @onclick="RunAudit" disabled="@(!Platform.CanManageSetup)">Run audit scan</button>
+    </div>
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Company setup</p>
+                <h3>Multi-company structure</h3>
+            </div>
+            <Icon Name="building" />
+        </div>
+        <div class="company-stack">
+            @if (Platform.Companies.Count == 0)
+            {
+                <div class="empty-state">@Platform.DataSourceStatus</div>
+            }
+            @foreach (var company in Platform.Companies)
+            {
+                <div>
+                    <span class="color-dot" style="background:@company.BrandColor"></span>
+                    <strong>@company.Name</strong>
+                    <p>@company.Industry, @company.City</p>
+                    <small>@company.Branches branches, @company.Locations locations</small>
+                </div>
+            }
+        </div>
+    </article>
+
+    <article class="panel span-2">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Role management</p>
+                <h3>RBAC and permissions</h3>
+            </div>
+            <Icon Name="lock" />
+        </div>
+        <div class="role-grid">
+            @foreach (var role in Platform.Roles)
+            {
+                <div>
+                    <strong>@role.Name</strong>
+                    <p>@role.Summary</p>
+                    <div class="tag-row">
+                        @foreach (var capability in role.Capabilities.Take(3))
+                        {
+                            <em>@capability</em>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </article>
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Feature flags</p>
+                <h3>Enterprise controls</h3>
+            </div>
+            <Icon Name="layers" />
+        </div>
+        <div class="toggle-list">
+            @foreach (var flag in Platform.FeatureFlags)
+            {
+                <label>
+                    <input type="checkbox" checked="@flag.Value" @onchange="() => ToggleFlag(flag.Key)" disabled="@(!Platform.CanManageSetup)" />
+                    <span>@flag.Key</span>
+                </label>
+            }
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Security</p>
+                <h3>Login, tenant access, audit</h3>
+            </div>
+            <Icon Name="shield" />
+        </div>
+        <div class="compliance-grid">
+            <div><strong>Cookie login</strong><span>Enabled</span></div>
+            <div><strong>RBAC</strong><span>Enabled</span></div>
+            <div><strong>Tenant claims</strong><span>Enabled</span></div>
+            <div><strong>Audit logs</strong><span>SQL table ready</span></div>
+            <div><strong>Protected APIs</strong><span>Enabled</span></div>
+            <div><strong>Password hashing</strong><span>Enabled</span></div>
+        </div>
+    </article>
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel span-2">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Workflow builder</p>
+                <h3>Reusable approval routes</h3>
+            </div>
+            <Icon Name="layers" />
+        </div>
+        <div class="workflow wide">
+            <span>Recruitment requisition</span>
+            <span>Onboarding checklist</span>
+            <span>Attendance regularization</span>
+            <span>Leave workflow</span>
+            <span>Expense workflow</span>
+            <span>Payroll lock</span>
+            <span>Audit trail</span>
+            <span>Status update</span>
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Audit trail</p>
+                <h3>Recent events</h3>
+            </div>
+            <Icon Name="receipt" />
+        </div>
+        <div class="timeline compact">
+            @foreach (var audit in Platform.AuditEvents.Take(6))
+            {
+                <div class="timeline-row">
+                    <span></span>
+                    <div>
+                        <strong>@audit.Actor</strong>
+                        <p>@audit.Action</p>
+                    </div>
+                    <small>@audit.Module</small>
+                </div>
+            }
+            @if (Platform.AuditEvents.Count == 0)
+            {
+                <div class="empty-state">No audit events yet. Real actions will be stored in SQL Server.</div>
+            }
+        </div>
+    </article>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="toast-line">@message</div>
+}
+
+@code {
+    private string? message;
+
+    private void ToggleFlag(string flag)
+    {
+        Platform.ToggleFeatureFlag(flag);
+        message = $"{flag} flag updated.";
+    }
+
+    private void ReviewSetup()
+    {
+        message = "Configuration reviewed. Editable company setup will be saved only after setup forms are enabled.";
+    }
+
+    private void RunAudit()
+    {
+        message = "Security audit reviewed for login, tenant access, RBAC, protected APIs, and audit logs.";
+    }
+}

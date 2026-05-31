@@ -1,0 +1,136 @@
+.brand {
+    padding: 1.1rem 1rem 1rem;
+}
+
+.brand-mark {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    color: #fff;
+    text-decoration: none;
+}
+
+.brand-mark .icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    color: #052f32;
+    background: linear-gradient(135deg, #d9fff7, #42d6bb);
+    box-shadow: 0 16px 32px rgba(1, 22, 25, .25);
+}
+
+.brand-mark strong {
+    display: block;
+    font-size: 1.08rem;
+}
+
+.brand-mark small {
+    display: block;
+    color: #9ddbd1;
+    font-size: .76rem;
+    margin-top: .12rem;
+}
+
+.navbar-toggler {
+    appearance: none;
+    cursor: pointer;
+    width: 3rem;
+    height: 2.4rem;
+    color: #fff;
+    position: absolute;
+    top: .95rem;
+    right: 1rem;
+    border: 1px solid rgba(255, 255, 255, .2);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .08);
+    display: none;
+}
+
+.navbar-toggler::before {
+    content: "";
+    position: absolute;
+    left: .72rem;
+    right: .72rem;
+    top: .75rem;
+    height: 2px;
+    background: currentColor;
+    box-shadow: 0 .45rem 0 currentColor, 0 .9rem 0 currentColor;
+}
+
+.nav-scrollable {
+    height: calc(100vh - 172px);
+    overflow-y: auto;
+    padding: .3rem .75rem 1rem;
+}
+
+.nav-list {
+    display: grid;
+    gap: .25rem;
+}
+
+.nav-link {
+    display: flex;
+    align-items: center;
+    gap: .72rem;
+    min-height: 44px;
+    padding: .7rem .75rem;
+    color: #c7f0ea;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 700;
+}
+
+.nav-link:hover,
+.nav-link.active {
+    color: #fff;
+    background: rgba(255, 255, 255, .12);
+}
+
+.nav-link.active {
+    box-shadow: inset 3px 0 0 #5bffd9;
+}
+
+.nav-link .icon {
+    color: #67e7d0;
+}
+
+.sidebar-footer {
+    margin: .25rem 1rem 1rem;
+    padding: .9rem;
+    border: 1px solid rgba(255, 255, 255, .14);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .07);
+    display: grid;
+    gap: .5rem;
+    color: #aee5db;
+    font-size: .82rem;
+}
+
+@media (max-width: 920px) {
+    .brand {
+        padding: .75rem 1rem;
+    }
+
+    .navbar-toggler {
+        display: block;
+    }
+
+    .nav-scrollable {
+        display: none;
+        height: auto;
+        max-height: calc(100vh - 74px);
+        padding-bottom: .8rem;
+    }
+
+    .navbar-toggler:checked ~ .nav-scrollable {
+        display: block;
+    }
+
+    .nav-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .sidebar-footer {
+        display: none;
+    }
+}

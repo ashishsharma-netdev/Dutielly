@@ -1,0 +1,675 @@
+@page "/employees"
+@inject IDutiellyPlatformService Platform
+
+@{
+    var employees = FilteredEmployees.ToList();
+    var selected = Platform.Employees.FirstOrDefault(employee => employee.Id == selectedEmployeeId)
+        ?? Platform.Employees.FirstOrDefault();
+    EnsureEditorLoaded(selected);
+    IReadOnlyList<EmployeeDocument> selectedDocuments = selected is null
+        ? []
+        : Platform.GetEmployeeDocuments(selected.Id);
+    var previewDocument = selectedDocuments.FirstOrDefault(document => document.Id == previewDocumentId);
+}
+
+<PageTitle>Dutielly Employees</PageTitle>
+
+<section class="page-intro">
+    <div>
+        <p class="eyebrow">Employee master</p>
+        <h2>Lifecycle records, documents, skills, and employment data</h2>
+        <p>Maintain employee IDs, joining details, grades, reporting hierarchy, leave balances, CTC, documents, and onboarding status.</p>
+    </div>
+    <div class="intro-actions">
+        <button type="button" class="btn-primary-soft" @onclick="ShowCreateGuidance" disabled="@(!Platform.CanManageEmployees)">New employee form</button>
+        <button type="button" class="btn-secondary-soft" @onclick="SeedOnboarding" disabled="@(selected is null || !Platform.CanManageEmployees)">Create onboarding task</button>
+    </div>
+</section>
+
+<section class="dashboard-grid employee-layout">
+    <article class="panel employee-list-panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Directory</p>
+                <h3>@employees.Count employees</h3>
+            </div>
+            <input class="search-input" placeholder="Search employee, skill, department" @bind="search" @bind:event="oninput" />
+        </div>
+
+        <div class="employee-table">
+            <div class="table-head">
+                <span>Employee</span>
+                <span>Department</span>
+                <span>Location</span>
+                <span>CTC</span>
+            </div>
+            @foreach (var employee in employees)
+            {
+                <button type="button" class="table-row @(selected is not null && employee.Id == selected.Id ? "active" : string.Empty)" @onclick="() => SelectEmployee(employee.Id)">
+                    <span>
+                        <strong>@employee.Name</strong>
+                        <small>@employee.Id, @employee.Role</small>
+                    </span>
+                    <span>@employee.Department</span>
+                    <span>@employee.Location</span>
+                    <span>@DutiellyPlatformService.ToCurrency(employee.MonthlyCtc)</span>
+                </button>
+            }
+            @if (employees.Count == 0)
+            {
+                <div class="empty-state">No employee records found. Add employees here or import them into SQL Server.</div>
+            }
+        </div>
+    </article>
+
+    <aside class="panel profile-panel">
+        @if (selected is null)
+        {
+            <div class="empty-state">Select or create an employee to view profile, employment, documents, bank, and compliance details.</div>
+        }
+        else
+        {
+            <div class="profile-header">
+                <div class="avatar">@GetInitials(selected.Name)</div>
+                <div>
+                    <StatusPill Text="@selected.Status" />
+                    <h3>@selected.Name</h3>
+                    <p>@selected.Role, @selected.Department</p>
+                </div>
+            </div>
+
+            <div class="profile-stats">
+                <div><span>Grade</span><strong>@selected.Grade</strong></div>
+                <div><span>Leave</span><strong>@selected.LeaveBalance days</strong></div>
+                <div><span>Utilization</span><strong>@selected.Utilization%</strong></div>
+                <div><span>Joined</span><strong>@selected.JoiningDate.ToString("dd MMM yyyy")</strong></div>
+            </div>
+
+            <div class="detail-list">
+                <div><span>Manager</span><strong>@selected.Manager</strong></div>
+                <div><span>Employment</span><strong>@selected.EmploymentType</strong></div>
+                <div><span>Documents</span><strong>@selectedDocuments.Count uploaded</strong></div>
+                <div><span>Confirmation</span><strong>Awaiting setup</strong></div>
+            </div>
+
+            <div class="tag-row roomy">
+                @if (selected.Skills.Length == 0)
+                {
+                    <em>No skills added</em>
+                }
+                @foreach (var skill in selected.Skills)
+                {
+                    <em>@skill</em>
+                }
+            </div>
+        }
+    </aside>
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Quick create</p>
+                <h3>New employee profile</h3>
+            </div>
+            <Icon Name="people" />
+        </div>
+        <div class="form-grid">
+            <label><span>Name</span><input @bind="newName" placeholder="Employee name" /></label>
+            <label><span>Role</span><input @bind="newRole" placeholder="Role" /></label>
+            <label><span>Department</span><input @bind="newDepartment" placeholder="Department" /></label>
+            <label><span>Location</span><input @bind="newLocation" placeholder="Location" /></label>
+            <label><span>Manager</span><input @bind="newManager" placeholder="Reporting manager" /></label>
+            <label><span>Employment</span><input @bind="newEmploymentType" placeholder="Permanent, contract, intern" /></label>
+            <label><span>Grade</span><input @bind="newGrade" placeholder="Grade or band" /></label>
+            <label><span>Monthly CTC</span><input type="number" @bind="newMonthlyCtc" /></label>
+            <label><span>Leave balance</span><input type="number" @bind="newLeaveBalance" /></label>
+            <label><span>Utilization %</span><input type="number" @bind="newUtilization" /></label>
+            <label><span>Skills</span><input @bind="newSkillsCsv" placeholder="Comma separated" /></label>
+        </div>
+        <p class="field-hint">Required before save: name, role, department, location, manager, employment type, grade, and positive monthly CTC.</p>
+        @if (!string.IsNullOrWhiteSpace(createError))
+        {
+            <div class="form-error">@createError</div>
+        }
+        <div class="intro-actions compact-actions">
+            <button type="button" class="btn-primary-soft" @onclick="AddEmployee" disabled="@(!CanCreateEmployee)">Create employee</button>
+            <button type="button" class="btn-secondary-soft" @onclick="ClearCreateForm">Clear</button>
+        </div>
+    </article>
+
+    <article class="panel span-2">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Profile editor</p>
+                <h3>Edit selected employee</h3>
+            </div>
+            <StatusPill Text="SQL backed" />
+        </div>
+        @if (selected is null)
+        {
+            <div class="empty-state">Select an employee to edit HR, payroll, and reporting fields.</div>
+        }
+        else
+        {
+            <p class="field-hint">Editing @selected.Name (@selected.Id). Select another row from the directory to load a different employee.</p>
+            <div class="form-grid">
+                <label><span>Name</span><input @bind="editName" disabled="@(!Platform.CanManageEmployees)" /></label>
+                <label><span>Role</span><input @bind="editRole" disabled="@(!Platform.CanManageEmployees)" /></label>
+                <label><span>Department</span><input @bind="editDepartment" disabled="@(!Platform.CanManageEmployees)" /></label>
+                <label><span>Location</span><input @bind="editLocation" disabled="@(!Platform.CanManageEmployees)" /></label>
+                <label><span>Manager</span><input @bind="editManager" disabled="@(!Platform.CanManageEmployees)" /></label>
+                <label><span>Employment</span><input @bind="editEmploymentType" disabled="@(!Platform.CanManageEmployees)" /></label>
+                <label><span>Grade</span><input @bind="editGrade" disabled="@(!Platform.CanManageEmployees)" /></label>
+                <label><span>Status</span><input @bind="editStatus" disabled="@(!Platform.CanManageEmployees)" /></label>
+                <label><span>Monthly CTC</span><input type="number" @bind="editMonthlyCtc" disabled="@(!Platform.CanManageEmployees)" /></label>
+                <label><span>Leave balance</span><input type="number" @bind="editLeaveBalance" disabled="@(!Platform.CanManageEmployees)" /></label>
+                <label><span>Utilization %</span><input type="number" @bind="editUtilization" disabled="@(!Platform.CanManageEmployees)" /></label>
+                <label><span>Skills</span><input @bind="editSkillsCsv" placeholder="Comma separated" disabled="@(!Platform.CanManageEmployees)" /></label>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(editError))
+            {
+                <div class="form-error">@editError</div>
+            }
+            <div class="intro-actions compact-actions">
+                <button type="button" class="btn-primary-soft" @onclick="SaveEmployee" disabled="@(!CanSaveEmployee)">Save employee</button>
+                <button type="button" class="btn-secondary-soft" @onclick="ResetEditor">Reset</button>
+            </div>
+        }
+    </article>
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Document vault</p>
+                <h3>Upload employee document</h3>
+            </div>
+            <Icon Name="receipt" />
+        </div>
+        @if (selected is null)
+        {
+            <div class="empty-state">Select an employee before uploading documents.</div>
+        }
+        else
+        {
+            <div class="form-grid single">
+                <label><span>Document name</span><input @bind="documentName" placeholder="PAN card, Aadhaar, offer letter" disabled="@(!Platform.CanManageEmployees)" /></label>
+                <label>
+                    <span>File picker</span>
+                    <InputFile OnChange="UploadDocument" accept=".jpg,.jpeg,.png,.pdf" disabled="@(!CanUploadDocument)" />
+                </label>
+            </div>
+            <p class="field-hint">Allowed files: JPG, JPEG, PNG, PDF. Maximum size: @FormatFileSize(MaxDocumentBytes). The file is stored in SQL Server as binary.</p>
+            @if (!string.IsNullOrWhiteSpace(documentError))
+            {
+                <div class="form-error">@documentError</div>
+            }
+        }
+    </article>
+
+    <article class="panel span-2">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Stored documents</p>
+                <h3>@selectedDocuments.Count documents</h3>
+            </div>
+            <StatusPill Text="SQL binary" />
+        </div>
+        @if (selected is null)
+        {
+            <div class="empty-state">Select an employee to view uploaded documents.</div>
+        }
+        else if (selectedDocuments.Count == 0)
+        {
+            <div class="empty-state">No documents uploaded for @selected.Name yet.</div>
+        }
+        else
+        {
+            <div class="employee-table document-table">
+                <div class="table-head">
+                    <span>Document</span>
+                    <span>File</span>
+                    <span>Uploaded</span>
+                    <span>Action</span>
+                </div>
+                @foreach (var document in selectedDocuments)
+                {
+                    <div class="table-row static">
+                        <span>
+                            <strong>@document.DocumentName</strong>
+                            <small>@document.FileExtension.ToUpperInvariant(), @FormatFileSize(document.FileSizeBytes)</small>
+                        </span>
+                        <span>@document.FileName</span>
+                        <span><strong>@document.UploadedAt.ToString("dd MMM yyyy")</strong><small>@document.UploadedBy</small></span>
+                        <span class="document-actions">
+                            <button type="button" class="inline-action" @onclick="() => PreviewDocument(document.Id)">View</button>
+                            <a class="inline-action download-link" href="@DocumentDownloadUrl(document)">Download</a>
+                        </span>
+                    </div>
+                }
+            </div>
+
+            @if (previewDocument is not null)
+            {
+                <div class="document-preview">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Preview</p>
+                            <h3>@previewDocument.DocumentName</h3>
+                        </div>
+                        <a class="inline-action download-link" href="@DocumentDownloadUrl(previewDocument)">Download</a>
+                    </div>
+                    @if (IsImage(previewDocument))
+                    {
+                        <img src="@DocumentViewUrl(previewDocument)" alt="@previewDocument.DocumentName" />
+                    }
+                    else if (IsPdf(previewDocument))
+                    {
+                        <iframe title="@previewDocument.DocumentName" src="@DocumentViewUrl(previewDocument)"></iframe>
+                    }
+                </div>
+            }
+        }
+    </article>
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel span-2">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Onboarding automation</p>
+                <h3>Checklist and allocation</h3>
+            </div>
+            <StatusPill Text="@onboardingStatus" />
+        </div>
+        <div class="workflow wide">
+            @foreach (var step in Platform.GetWorkflowSteps("Onboarding"))
+            {
+                <span>@step</span>
+            }
+        </div>
+        <div class="module-grid compact">
+            <div class="mini-feature"><Icon Name="receipt" /><strong>Document collection</strong><span>Aadhaar, PAN, bank, offer letter</span></div>
+            <div class="mini-feature"><Icon Name="card" /><strong>Asset assignment</strong><span>Laptop, ID card, mobile device</span></div>
+            <div class="mini-feature"><Icon Name="team" /><strong>Team assignment</strong><span>Manager, department, cost center</span></div>
+            <div class="mini-feature"><Icon Name="clock" /><strong>Shift assignment</strong><span>General, flexible, rotational</span></div>
+        </div>
+    </article>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="toast-line">@message</div>
+}
+
+@code {
+    private string search = string.Empty;
+    private string selectedEmployeeId = string.Empty;
+    private string newName = string.Empty;
+    private string newRole = string.Empty;
+    private string newDepartment = string.Empty;
+    private string newLocation = string.Empty;
+    private string newManager = string.Empty;
+    private string newEmploymentType = "Permanent";
+    private string newGrade = string.Empty;
+    private decimal newMonthlyCtc;
+    private int newLeaveBalance;
+    private double newUtilization;
+    private string newSkillsCsv = string.Empty;
+    private string onboardingStatus = "Ready";
+    private string? message;
+    private string? createError;
+    private string? editError;
+    private string documentName = string.Empty;
+    private string? documentError;
+    private Guid? previewDocumentId;
+    private string loadedEditorEmployeeId = string.Empty;
+    private string editName = string.Empty;
+    private string editRole = string.Empty;
+    private string editDepartment = string.Empty;
+    private string editLocation = string.Empty;
+    private string editManager = string.Empty;
+    private string editEmploymentType = string.Empty;
+    private string editGrade = string.Empty;
+    private string editStatus = "Active";
+    private decimal editMonthlyCtc;
+    private int editLeaveBalance;
+    private double editUtilization;
+    private string editSkillsCsv = string.Empty;
+
+    private IEnumerable<EmployeeProfile> FilteredEmployees =>
+        string.IsNullOrWhiteSpace(search)
+            ? Platform.Employees
+            : Platform.Employees.Where(employee =>
+                employee.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
+                || employee.Id.Contains(search, StringComparison.OrdinalIgnoreCase)
+                || employee.Department.Contains(search, StringComparison.OrdinalIgnoreCase)
+                || employee.Role.Contains(search, StringComparison.OrdinalIgnoreCase)
+                || employee.Skills.Any(skill => skill.Contains(search, StringComparison.OrdinalIgnoreCase)));
+
+    private bool CanCreateEmployee =>
+        Platform.CanManageEmployees
+        && HasText(newName)
+        && HasText(newRole)
+        && HasText(newDepartment)
+        && HasText(newLocation)
+        && HasText(newManager)
+        && HasText(newEmploymentType)
+        && HasText(newGrade)
+        && newMonthlyCtc > 0
+        && newLeaveBalance >= 0
+        && newUtilization >= 0
+        && newUtilization <= 100;
+
+    private bool CanSaveEmployee =>
+        Platform.CanManageEmployees
+        && HasText(loadedEditorEmployeeId)
+        && HasText(editName)
+        && HasText(editRole)
+        && HasText(editDepartment)
+        && HasText(editLocation)
+        && HasText(editManager)
+        && HasText(editEmploymentType)
+        && HasText(editGrade)
+        && HasText(editStatus)
+        && editMonthlyCtc > 0
+        && editLeaveBalance >= 0
+        && editUtilization >= 0
+        && editUtilization <= 100;
+
+    private bool CanUploadDocument =>
+        Platform.CanManageEmployees
+        && HasText(selectedEmployeeId)
+        && HasText(documentName);
+
+    private const long MaxDocumentBytes = 10 * 1024 * 1024;
+
+    private void SelectEmployee(string employeeId)
+    {
+        selectedEmployeeId = employeeId;
+        previewDocumentId = null;
+        documentError = null;
+        var employee = Platform.Employees.FirstOrDefault(item => item.Id == employeeId);
+        LoadEditor(employee);
+    }
+
+    private void AddEmployee()
+    {
+        createError = null;
+        message = null;
+        if (!CanCreateEmployee)
+        {
+            createError = "Enter required profile fields and a positive monthly CTC before creating an employee.";
+            return;
+        }
+
+        EmployeeProfile employee;
+        try
+        {
+            employee = Platform.AddEmployee(
+                newName,
+                newRole,
+                newDepartment,
+                newLocation,
+                newManager,
+                newEmploymentType,
+                newGrade,
+                newMonthlyCtc,
+                newLeaveBalance,
+                newUtilization,
+                newSkillsCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        }
+        catch (ArgumentException ex)
+        {
+            createError = ex.Message;
+            return;
+        }
+
+        selectedEmployeeId = employee.Id;
+        LoadEditor(employee);
+        message = $"{employee.Name} created with employee ID {employee.Id}.";
+        newName = string.Empty;
+        newRole = string.Empty;
+        newDepartment = string.Empty;
+        newLocation = string.Empty;
+        newManager = string.Empty;
+        newEmploymentType = "Permanent";
+        newGrade = string.Empty;
+        newMonthlyCtc = 0;
+        newLeaveBalance = 0;
+        newUtilization = 0;
+        newSkillsCsv = string.Empty;
+    }
+
+    private void SaveEmployee()
+    {
+        editError = null;
+        message = null;
+        if (string.IsNullOrWhiteSpace(loadedEditorEmployeeId))
+        {
+            message = "Select an employee before saving.";
+            return;
+        }
+
+        if (!CanSaveEmployee)
+        {
+            editError = "Complete required profile fields, keep monthly CTC positive, and keep leave and utilization values in range.";
+            return;
+        }
+
+        EmployeeProfile? updated;
+        try
+        {
+            updated = Platform.UpdateEmployee(new EmployeeProfile
+            {
+                Id = loadedEditorEmployeeId,
+                Name = editName,
+                Role = editRole,
+                Department = editDepartment,
+                Location = editLocation,
+                Manager = editManager,
+                EmploymentType = editEmploymentType,
+                Grade = editGrade,
+                Status = editStatus,
+                MonthlyCtc = editMonthlyCtc,
+                LeaveBalance = editLeaveBalance,
+                Utilization = editUtilization,
+                Skills = editSkillsCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            });
+        }
+        catch (ArgumentException ex)
+        {
+            editError = ex.Message;
+            return;
+        }
+
+        if (updated is null)
+        {
+            message = "Employee could not be updated for the selected tenant.";
+            return;
+        }
+
+        LoadEditor(updated);
+        message = $"{updated.Name} profile updated.";
+    }
+
+    private void ResetEditor()
+    {
+        var selected = Platform.Employees.FirstOrDefault(employee => employee.Id == selectedEmployeeId);
+        LoadEditor(selected);
+        editError = null;
+        message = selected is null ? "No employee selected." : "Editor reset to saved profile.";
+    }
+
+    private void EnsureEditorLoaded(EmployeeProfile? employee)
+    {
+        if (employee is not null && string.IsNullOrWhiteSpace(selectedEmployeeId))
+        {
+            selectedEmployeeId = employee.Id;
+        }
+
+        if (employee is not null && loadedEditorEmployeeId != employee.Id)
+        {
+            LoadEditor(employee);
+        }
+    }
+
+    private void LoadEditor(EmployeeProfile? employee)
+    {
+        if (employee is null)
+        {
+            loadedEditorEmployeeId = string.Empty;
+            editName = string.Empty;
+            editRole = string.Empty;
+            editDepartment = string.Empty;
+            editLocation = string.Empty;
+            editManager = string.Empty;
+            editEmploymentType = string.Empty;
+            editGrade = string.Empty;
+            editStatus = "Active";
+            editMonthlyCtc = 0;
+            editLeaveBalance = 0;
+            editUtilization = 0;
+            editSkillsCsv = string.Empty;
+            return;
+        }
+
+        loadedEditorEmployeeId = employee.Id;
+        editName = employee.Name;
+        editRole = employee.Role;
+        editDepartment = employee.Department;
+        editLocation = employee.Location;
+        editManager = employee.Manager;
+        editEmploymentType = employee.EmploymentType;
+        editGrade = employee.Grade;
+        editStatus = employee.Status;
+        editMonthlyCtc = employee.MonthlyCtc;
+        editLeaveBalance = employee.LeaveBalance;
+        editUtilization = employee.Utilization;
+        editSkillsCsv = string.Join(", ", employee.Skills);
+    }
+
+    private async Task UploadDocument(InputFileChangeEventArgs args)
+    {
+        documentError = null;
+        message = null;
+        if (!CanUploadDocument)
+        {
+            documentError = "Enter a document name and select an employee before choosing a file.";
+            return;
+        }
+
+        var file = args.File;
+        var extension = Path.GetExtension(file.Name).TrimStart('.').ToLowerInvariant();
+        if (extension is not ("jpg" or "jpeg" or "png" or "pdf"))
+        {
+            documentError = "Only JPG, JPEG, PNG, and PDF files are allowed.";
+            return;
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxDocumentBytes);
+            using var memory = new MemoryStream();
+            await stream.CopyToAsync(memory);
+            var uploaded = Platform.AddEmployeeDocument(selectedEmployeeId, documentName, file.Name, file.ContentType, memory.ToArray());
+            previewDocumentId = uploaded.Id;
+            message = $"{uploaded.DocumentName} uploaded for {uploaded.EmployeeName}.";
+            documentName = string.Empty;
+        }
+        catch (IOException)
+        {
+            documentError = $"File is too large. Maximum allowed size is {FormatFileSize(MaxDocumentBytes)}.";
+        }
+        catch (ArgumentException ex)
+        {
+            documentError = ex.Message;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            documentError = ex.Message;
+        }
+    }
+
+    private void PreviewDocument(Guid documentId)
+    {
+        previewDocumentId = documentId;
+    }
+
+    private string DocumentViewUrl(EmployeeDocument document)
+    {
+        return $"/api/employees/{Uri.EscapeDataString(document.EmployeeId)}/documents/{document.Id}/view?tenantId={Uri.EscapeDataString(Platform.CurrentTenantId)}";
+    }
+
+    private string DocumentDownloadUrl(EmployeeDocument document)
+    {
+        return $"/api/employees/{Uri.EscapeDataString(document.EmployeeId)}/documents/{document.Id}/download?tenantId={Uri.EscapeDataString(Platform.CurrentTenantId)}";
+    }
+
+    private static bool IsImage(EmployeeDocument document)
+    {
+        return document.FileExtension is "jpg" or "jpeg" or "png";
+    }
+
+    private static bool IsPdf(EmployeeDocument document)
+    {
+        return document.FileExtension == "pdf";
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes >= 1024 * 1024)
+        {
+            return $"{bytes / 1024d / 1024d:0.#} MB";
+        }
+
+        return $"{Math.Max(1, bytes / 1024d):0.#} KB";
+    }
+
+    private void SeedOnboarding()
+    {
+        onboardingStatus = "Checklist live";
+        message = "Onboarding checklist, asset allocation, and shift assignment queued for HR review.";
+    }
+
+    private void ClearCreateForm()
+    {
+        newName = string.Empty;
+        newRole = string.Empty;
+        newDepartment = string.Empty;
+        newLocation = string.Empty;
+        newManager = string.Empty;
+        newEmploymentType = "Permanent";
+        newGrade = string.Empty;
+        newMonthlyCtc = 0;
+        newLeaveBalance = 0;
+        newUtilization = 0;
+        newSkillsCsv = string.Empty;
+        createError = null;
+        message = "New employee form cleared.";
+    }
+
+    private void ShowCreateGuidance()
+    {
+        message = "Use the New employee profile form below. No record is saved until all required fields are completed and Create employee is clicked.";
+    }
+
+    private static bool HasText(string value)
+    {
+        return !string.IsNullOrWhiteSpace(value);
+    }
+
+    private static string GetInitials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0)
+        {
+            return "DU";
+        }
+
+        return string.Concat(parts.Take(2).Select(part => part[0])).ToUpperInvariant();
+    }
+}

@@ -1,0 +1,30 @@
+<span class="status-pill @ToneClass">@Text</span>
+
+@code {
+    [Parameter] public string Text { get; set; } = "Ready";
+    [Parameter] public string? Tone { get; set; }
+
+    private string ToneClass
+    {
+        get
+        {
+            var value = (Tone ?? Text).ToLowerInvariant();
+            if (value.Contains("approved") || value.Contains("released") || value.Contains("connected") || value.Contains("ready") || value.Contains("good"))
+            {
+                return "status-good";
+            }
+
+            if (value.Contains("pending") || value.Contains("draft") || value.Contains("watch") || value.Contains("sandbox"))
+            {
+                return "status-watch";
+            }
+
+            if (value.Contains("rejected") || value.Contains("risk") || value.Contains("high"))
+            {
+                return "status-risk";
+            }
+
+            return "status-neutral";
+        }
+    }
+}

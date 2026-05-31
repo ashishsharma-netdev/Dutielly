@@ -1,0 +1,10 @@
+aws_region              = "ap-south-1"
+app_name                = "dutielly"
+environment             = "prod"
+image_tag               = "replace-with-built-image-tag"
+db_instance_class       = "db.t3.small"
+db_allocated_storage    = 20
+db_backup_retention_days = 7
+db_multi_az             = false
+deletion_protection     = true
+skip_final_snapshot     = true

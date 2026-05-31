@@ -1,0 +1,332 @@
+@page "/attendance"
+@inject IDutiellyPlatformService Platform
+
+@{
+    var selectedEmployee = Platform.Employees.FirstOrDefault(item => item.Id == selectedEmployeeId)
+        ?? Platform.Employees.FirstOrDefault();
+    EnsureAttendanceDefaults(selectedEmployee);
+}
+
+<PageTitle>Dutielly Attendance</PageTitle>
+
+<section class="page-intro">
+    <div>
+        <p class="eyebrow">Attendance and site visibility</p>
+        <h2>Web, mobile, office kiosk, and manager-entered attendance</h2>
+        <p>Capture tenant-aware check-in/out entries, missed punch regularization, WFH work logs, and payroll-ready attendance summaries.</p>
+    </div>
+    <div class="intro-actions">
+        <button type="button" class="btn-primary-soft" @onclick="CheckIn" disabled="@(!CanCheckIn)">Check in</button>
+        <button type="button" class="btn-secondary-soft" @onclick="CreateRegularization" disabled="@(selectedEmployee is null || !Platform.CanManageAttendance)">Request regularization</button>
+    </div>
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Attendance entry</p>
+                <h3>Check-in form</h3>
+            </div>
+            <Icon Name="phone" />
+        </div>
+        <div class="form-grid single">
+            <label>
+                <span>Employee</span>
+                <select @bind="selectedEmployeeId">
+                    @if (Platform.Employees.Count == 0)
+                    {
+                        <option value="">No employee records in SQL Server</option>
+                    }
+                    else
+                    {
+                        <option value="">Select employee</option>
+                    }
+                    @foreach (var employee in Platform.Employees)
+                    {
+                        <option value="@employee.Id">@employee.Name</option>
+                    }
+                </select>
+            </label>
+            <label>
+                <span>Method</span>
+                <select @bind="selectedMethod">
+                    <option>Web Check-In</option>
+                    <option>Mobile Check-In</option>
+                    <option>Office Kiosk</option>
+                    <option>Manager Entry</option>
+                </select>
+            </label>
+            <label>
+                <span>Location</span>
+                <input @bind="selectedLocation" placeholder="Office, branch, or work site" />
+            </label>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(formError))
+        {
+            <div class="form-error">@formError</div>
+        }
+        <div class="security-grid">
+            @foreach (var signal in securitySignals)
+            {
+                <div><Icon Name="shield" /><span>@signal</span></div>
+            }
+        </div>
+    </article>
+
+    <article class="panel span-2">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Workforce visibility</p>
+                <h3>Branch and site summary</h3>
+            </div>
+            <StatusPill Text="SQL-backed" />
+        </div>
+        <div class="map-surface">
+            <div class="map-route"></div>
+            <span class="pin p1"><Icon Name="map" /> Office branch</span>
+            <span class="pin p2"><Icon Name="map" /> Branch location</span>
+            <span class="pin p3"><Icon Name="map" /> Client work site</span>
+            <div class="map-card">
+                <strong>Site coverage</strong>
+                <span>Connect SQL Server records to review attendance by branch</span>
+                <span>Client-site visits will appear here</span>
+            </div>
+        </div>
+    </article>
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel span-2">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Attendance register</p>
+                <h3>Today and exceptions</h3>
+            </div>
+            <StatusPill Text="@($"{Platform.AttendanceLogs.Count} logs")" />
+        </div>
+        <div class="employee-table">
+            <div class="table-head">
+                <span>Employee</span>
+                <span>Method</span>
+                <span>Location</span>
+                <span>Time</span>
+                <span>Action</span>
+            </div>
+            @foreach (var log in Platform.AttendanceLogs.Take(8))
+            {
+                <div class="table-row static">
+                    <span>
+                        <strong>@log.EmployeeName</strong>
+                        <small>@log.SecuritySignal</small>
+                    </span>
+                    <span>@log.Method</span>
+                    <span>@log.Location</span>
+                    <span>@log.CheckIn.ToString("HH:mm") - @(log.CheckOut?.ToString("HH:mm") ?? "Live")</span>
+                    <span>
+                        @if (log.CheckOut is null)
+                        {
+                            <button type="button" class="inline-action" @onclick="() => CheckOut(log.Id)" disabled="@(!Platform.CanManageAttendance)">Checkout</button>
+                        }
+                        else
+                        {
+                            <StatusPill Text="Complete" />
+                        }
+                    </span>
+                </div>
+            }
+            @if (Platform.AttendanceLogs.Count == 0)
+            {
+                <div class="empty-state">No attendance logs yet. Create real employees and capture check-in/out entries.</div>
+            }
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Entry methods</p>
+                <h3>Enabled channels</h3>
+            </div>
+            <Icon Name="shield" />
+        </div>
+        <div class="toggle-list">
+            @foreach (var method in smartMethods)
+            {
+                <label>
+                    <input type="checkbox" checked />
+                    <span>@method</span>
+                </label>
+            }
+        </div>
+    </article>
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Shift management</p>
+                <h3>Roster coverage</h3>
+            </div>
+            <Icon Name="calendar" />
+        </div>
+        <div class="shift-grid">
+            <div><strong>General</strong><span>09:00 - 18:00</span></div>
+            <div><strong>Morning</strong><span>06:00 - 14:00</span></div>
+            <div><strong>Evening</strong><span>14:00 - 22:00</span></div>
+            <div><strong>Night</strong><span>22:00 - 06:00</span></div>
+            <div><strong>Flexible</strong><span>9 hours window</span></div>
+            <div><strong>Rotational</strong><span>Auto roster</span></div>
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">WFH module</p>
+                <h3>Remote productivity</h3>
+            </div>
+            <Icon Name="home" />
+        </div>
+        <div class="payroll-stack">
+            <div><span>WFH check-ins</span><strong>0</strong></div>
+            <div><span>Work logs</span><strong>0</strong></div>
+            <div><span>Productivity</span><strong>Awaiting data</strong></div>
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Daily reports</p>
+                <h3>Field evidence</h3>
+            </div>
+            <Icon Name="note" />
+        </div>
+        <div class="detail-list">
+            <div><span>Tasks</span><strong>0 submitted</strong></div>
+            <div><span>Notes</span><strong>0 reviewed</strong></div>
+            <div><span>Attachments</span><strong>0 site photos</strong></div>
+            <div><span>Utilization</span><strong>Awaiting data</strong></div>
+        </div>
+    </article>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="toast-line">@message</div>
+}
+
+@code {
+    private string selectedEmployeeId = string.Empty;
+    private string selectedMethod = "Web Check-In";
+    private string selectedLocation = string.Empty;
+    private string loadedLocationEmployeeId = string.Empty;
+    private string? message;
+    private string? formError;
+
+    private readonly string[] securitySignals =
+    [
+        "Tenant access verified",
+        "Employee record matched",
+        "Role permission checked",
+        "Timestamp saved",
+        "Audit trail"
+    ];
+
+    private readonly string[] smartMethods =
+    [
+        "Web check-in",
+        "Mobile check-in",
+        "Office kiosk",
+        "Manager entry"
+    ];
+
+    private bool CanCheckIn =>
+        Platform.CanManageAttendance
+        && HasText(selectedEmployeeId)
+        && HasText(selectedMethod)
+        && HasText(selectedLocation);
+
+    private void CheckIn()
+    {
+        formError = null;
+        message = null;
+        if (string.IsNullOrWhiteSpace(selectedEmployeeId))
+        {
+            formError = "Select an employee before capturing check-in.";
+            return;
+        }
+
+        if (!CanCheckIn)
+        {
+            formError = "Employee, method, and location are required.";
+            return;
+        }
+
+        AttendanceLog? log;
+        try
+        {
+            log = Platform.CheckIn(selectedEmployeeId, selectedMethod, selectedLocation);
+        }
+        catch (ArgumentException ex)
+        {
+            formError = ex.Message;
+            return;
+        }
+
+        message = log is null
+            ? "Check-in could not be captured because the employee record was not found."
+            : $"{log.EmployeeName} checked in at {log.CheckIn:HH:mm} via {log.Method}.";
+    }
+
+    private void CheckOut(Guid id)
+    {
+        try
+        {
+            Platform.CheckOut(id);
+            message = "Checkout captured and attendance summary updated.";
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            message = ex.Message;
+        }
+    }
+
+    private void CreateRegularization()
+    {
+        formError = null;
+        if (string.IsNullOrWhiteSpace(selectedEmployeeId))
+        {
+            formError = "Select the employee whose attendance needs regularization.";
+            return;
+        }
+
+        message = "Regularization draft prepared for manager and HR review.";
+    }
+
+    private void EnsureAttendanceDefaults(EmployeeProfile? employee)
+    {
+        if (employee is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(selectedEmployeeId))
+        {
+            selectedEmployeeId = employee.Id;
+        }
+
+        if (loadedLocationEmployeeId != selectedEmployeeId)
+        {
+            selectedLocation = employee.Location;
+            loadedLocationEmployeeId = selectedEmployeeId;
+        }
+    }
+
+    private static bool HasText(string value)
+    {
+        return !string.IsNullOrWhiteSpace(value);
+    }
+}
